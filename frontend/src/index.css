@@ -1,0 +1,6 @@
+@import "tailwindcss";
+.transition-width {
+  transition-property: width;
+  transition-duration: 300ms;
+  transition-timing-function: ease-in-out;
+}

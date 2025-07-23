@@ -5,8 +5,12 @@ app.use(express.json());
 import jwt from "jsonwebtoken";
 import { JWT_SECRET } from "./config";
 
-import { ContentModel, UserModel } from "./db";
+import { ContentModel, LinkModel, UserModel } from "./db";
 import { userMiddleware } from "./middleware";
+import { randomString } from "./utils";
+
+import cors from "cors";
+app.use(cors())
 
 app.post("/api/v1/signup", async (req, res) => {
   const { username, password } = req.body;
@@ -38,11 +42,11 @@ app.post("/api/v1/signin", async (req, res) => {
 });
 
 app.post("/api/v1/content", userMiddleware, async (req, res) => {
-  const { title, link } = req.body;
+  const { title, link, type } = req.body;
   // @ts-ignore
   const userId = req.userId;
   try {
-    await ContentModel.create({ title, link, tags: [], userId });
+    await ContentModel.create({ title, link, type, tags: [], userId });
     res.json({ message: "Content created successfully" });
   } catch (error) {
     res.status(500).json({ message: "Internal Server Error" });
@@ -68,9 +72,34 @@ app.delete("/api/v1/content", userMiddleware, async (req, res) => {
   }
 });
 
-app.post("/api/v1/mind/share", (req, res) => {});
+app.post("/api/v1/mind/share", userMiddleware, async (req, res) => {
+  const {share} = req.body;
+  // @ts-ignore
+  const { userId } = req;
+  if(share){
+    const existingLink = await LinkModel.findOne({ userId });
+    const rand: string = randomString(10);
+    if(existingLink) {
+      await LinkModel.updateOne({ userId }, { hash: rand });
+    } else {
+      await LinkModel.create({ userId, hash: rand });
+    }
+    res.json({ message: rand });
+  } else {
+    await LinkModel.deleteOne({ userId });
+    res.json({ message: "Mind share removed successfully" });
+  }
+});
 
-app.get("/api/v1/mind/:shareLink", (req, res) => {});
+app.get("/api/v1/mind/:shareLink", async (req, res) => {
+  const hash = req.params.shareLink;
+  const link = await LinkModel.findOne({ hash});
+  if(!link) {
+    return res.status(411).json({ message: "Share link not found" });
+  }
+  const contents = await ContentModel.find({ userId: link.userId }).populate("userId", "username");
+  res.json(contents);
+});
 
 app.listen(3000, () => {
   console.log(`Server is running on port 3000`);
